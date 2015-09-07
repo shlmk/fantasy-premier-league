@@ -1,0 +1,85 @@
+---
+title: "Is Chelsea boring?"
+author: "Mihai Sirbu"
+date: "Monday, September 07, 2015"
+output: pdf_document
+---
+
+```{r, echo=FALSE, include=FALSE}
+library(plyr)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+```
+
+#Intro 
+
+Jose Mourinho returned to Chelsea on June 3rd 2013. As soon as he did, many 
+premier league fans (including myself) braced for a return of "boring Chelsea."
+In fact, the idea that Chelsea like to "park the bus" had been a complaint even
+before Mourinho returned. Which made me want to know: is this even true?
+
+(Full disclaimer: I'm a Liverpool fan and I would like nothing more than
+confirming this belief. Keep this in mind when I discuss the results.)
+
+To investigate this question I used the english premier league results dataset
+from James P. Curley (2015). engsoccerdata: English Soccer Data 1871-2015.
+(You can check out his github at: https://github.com/jalapic/engsoccerdata).
+
+Because I started watching the premier league starting from the 2009 season, I
+decided to investigate "boringness" (defined below) from the 2009-2010 to the
+2014-2015 season. I also decided to use the teams that have been often considered
+the top 7 teams in the premier league: Liverpool, Manchester United, Chelsea,
+Arsenal, Manchester City, Tottenham, and Everton. 
+
+To be able to access the data do the following:
+```{r}
+#Commented out because already done.
+#library(devtools)
+#install_github('jalapic/engsoccerdata', username = "jalapic")
+library(engsoccerdata)
+```
+
+Then you can load the data as follows:
+```{r}
+data(engsoccerdata2)
+engsoccer_tbl <- as.tbl(engsoccerdata2)
+```
+
+Let's get a sense of the data and output the first ten rows
+```{r}
+engsoccer_tbl
+str(engsoccer_tbl)
+```
+
+#Prep
+
+Before we get to the analysis, we need to prepare the necessary components and
+table
+
+```{r}
+#The teams we wish to examine
+teams <- c("Arsenal", "Chelsea", "Everton", "Liverpool", "Manchester City", 
+           "Manchester United", "Tottenham Hotspur")
+
+#We want to start on the 2009 season and go until the most recent season
+rel_tbl <- engsoccer_tbl %>% filter(Season > 2008, division == 1) %>% 
+  filter(home %in% teams | visitor %in% teams)
+
+#rel_tbl$home <- str_replace_all(rel_tbl$home, " ", "_")
+#rel_tbl$visitor <- str_replace_all(rel_tbl$visitor, " ", "_")
+
+#team_result <- lapply(teams, function(team){return(matrix(0, nrow=10,ncol=10))})
+#names(team_result) <- str_replace_all(teams," ", "_")
+#teams <- str_replace_all(teams, " ", "_")
+```
+
+Now what do I mean by boring? I mean "boring games" where I define as scores 
+that are contained as 0-0, 1-0, or 0-1. To figure this out we need to figure 
+out what percentage of games end in each score line up to a maximum of9 goals,
+the game between Tottenham and Wigan
+```{r}
+max(max(rel_tbl$hgoal),max(rel_tbl$vgoal))
+
+
+```
