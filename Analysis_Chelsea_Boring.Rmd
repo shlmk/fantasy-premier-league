@@ -76,10 +76,128 @@ rel_tbl <- engsoccer_tbl %>% filter(Season > 2008, division == 1) %>%
 
 Now what do I mean by boring? I mean "boring games" where I define as scores 
 that are contained as 0-0, 1-0, or 0-1. To figure this out we need to figure 
-out what percentage of games end in each score line up to a maximum of9 goals,
+out what percentage of games end in each score line up to a maximum of 9 goals,
 the game between Tottenham and Wigan
 ```{r}
-max(max(rel_tbl$hgoal),max(rel_tbl$vgoal))
+max_goals <- max(max(rel_tbl$hgoal),max(rel_tbl$vgoal))
 
+rel_tbl %>% filter(hgoal == max_goals | vgoal == max_goals)
 
 ```
+
+To calculate the necessary percentages we are going to use the following 
+function:
+
+```{r}
+calculate_team_percent <- function(team, data){
+  total_count <- data %>% filter(home == team | visitor == team) %>%
+  mutate(Team = team, Team_Goals_Scored = ifelse(home == team, hgoal, vgoal), 
+         Opp_Goals_Scored = ifelse(home == team, vgoal, hgoal)) %>%
+         group_by(Team, Team_Goals_Scored, Opp_Goals_Scored) %>% 
+         tally() %>% 
+         ungroup() %>%
+         mutate(Percent = n/sum(n)* 100)
+  
+  all_fixtures <- as.tbl(cbind(Team=team, expand.grid(Team_Goals_Scored=seq(0,9),
+                                                Opp_Goals_Scored=seq(0,9))))
+                         
+  merged_tbl <- as.tbl(merge(all_fixtures, total_count, all.x=TRUE, 
+                      by=c("Team","Team_Goals_Scored","Opp_Goals_Scored")))
+  
+  merged_tbl <- mutate(merged_tbl, n = ifelse(is.na(n), 0, n), 
+                      Percent = ifelse(is.na(Percent), 0, Percent))
+  return(merged_tbl)
+}
+
+```
+
+Let me stop and explain what the function above is doing. Essentially it's 
+creating two separate tables and joining them together. The first table (total
+count) tallies up all of the different score combinations across the last six 
+seaons. So it tells you, for example, the percentage of games that end 0-0. 
+Unfortunately, it does not include scores that DO NOT occur such as 7-7. 
+However for each team we want to create a heatmap and we want to show that 
+particular scoreline to be 0. Which is where the second table comes in. 
+In all_fixtures we are creating a table with all possible score lines up to
+9-9. From there we outer join the two tables (thus giving us a table with all
+fixtures included) and replace all NAs (because fixtures not present in 
+total_count are given a value of NA) in the n and Percent column with 0.
+
+We can get the results for all teams by doing the following: 
+```{r}
+all_teams <- as.tbl(do.call("rbind", lapply(teams, calculate_team_percent,data=rel_tbl)))
+
+```
+
+
+#Analysis 
+
+Now that we have the desired data frame, it's time we created some heatmaps. 
+We're going to use this function below to create a heatmaps. 
+
+```{r}
+create_heatmap <- function(team, data){
+  
+  team_data <- data %>% filter(Team == team)
+                               
+  ggplot(team_data, aes(x=Opp_Goals_Scored,y=Team_Goals_Scored)) + 
+  geom_tile(aes(fill = Percent),colour = "white") + 
+geom_text(aes(fill = Percent, label = round(Percent, 2)))+
+  scale_fill_gradient(low = "white", high = "steelblue")+
+  scale_x_continuous(breaks=0:9, expand=c(0,0))+
+  scale_y_continuous(breaks=0:9, expand=c(0,0))+
+  ggtitle(str_c("Distribution of ", team, "\nFixture Results (2009-2015)"))+
+  theme(plot.title = element_text(size = 18),
+        axis.title.x = element_text(size = 16),
+        axis.title.y = element_text(size = 16),
+        axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12))+
+  labs(x="# goals scored by Opponent")+
+  labs(y=str_c("# goals scored by ", team))
+}
+
+```
+
+Here's the heatmap distribution for Liverpool
+
+```{r}
+create_heatmap("Liverpool", all_teams)
+```
+
+We can easily create the 6 other heatmaps but it's not easy to compare across
+7 plots. Instead we're going to filter the all_teams dataframe to easily compare
+across teams. 
+
+\pagebreak
+
+It's time to now address some of the questions we hope to address.
+
+##Who are the boring teams?
+```{r}
+all_teams %>% group_by(Team) %>% filter(Team_Goals_Scored <= 1, Opp_Goals_Scored <= 1) %>%
+  summarise(Percent_Boring = sum(Percent)) %>% arrange(desc(Percent_Boring))
+```
+
+As you can see here, Everton actually tops the list at a little over 38.5% The other 
+6 teams are all in roughly the same range, with a low of ~29% and a high of ~33%.
+From this evidence alone we cannot say that Chelsea is "boring."
+
+##Does Chelsea dominate in the 1-0 category?
+```{r}
+all_teams %>% group_by(Team) %>% filter(Team_Goals_Scored == 1, Opp_Goals_Scored == 0) %>%
+  summarise(Grind_Wins = sum(Percent)) %>% arrange(desc(Grind_Wins))
+```
+
+Another complaint is that Chelsea are the experts in grinding out "1-0" wins.
+From this evidence we can't say that Chelsea are any better than any other team.
+
+###Or the 0-0 category?
+```{r}
+all_teams %>% group_by(Team) %>% filter(Team_Goals_Scored == 0, Opp_Goals_Scored == 0) %>%
+  summarise(No_Score = sum(Percent)) %>% arrange(desc(No_Score))
+```
+
+Maybe Chelsea are specialists in goalless draws. Even in this case, that is false.
+In fact, my beloved Liverpool tops this category (but only ~1% more than the
+majority of the other teams) while the team I dread the most has the lowest
+percentage of games that end in goalless draws across these 6 seasons. 
